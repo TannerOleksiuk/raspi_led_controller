@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LED Brightness Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #181c20;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #23272b;
+            padding: 2rem 3rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+            letter-spacing: 1px;
+        }
+        .slider {
+            width: 350px;
+            margin: 1.5rem 0;
+            accent-color: #00b8e6;
+            height: 6px;
+        }
+        .button {
+            background: #00b8e6;
+            border: none;
+            color: #000;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background: #02a9d3;
+        }
+        .button:active {
+            background: #017491;
+        }
+        .value {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #00b8e6;
+            font-weight: bold;
+        }
+        @media (max-width: 500px) {
+            .slider {
+                width: 90vw;
+            }
+            .container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LED Brightness Controller</h1>
+        <div class="value" id="brightnessValue">50</div>
+        <input
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            class="slider"
+            id="brightnessSlider"
+        >
+        <br>
+        <input type="button" value="On" id="ledOnButton" class="button">
+        <input type="button" value="Lock" id="lockButton" class="button">
+        <input type="button" value="Off" id="ledOffButton" class="button">
+    </div>
+    <script>
+        const slider = document.getElementById('brightnessSlider');
+        const lockButton = document.getElementById('lockButton');
+        const ledOnButton = document.getElementById('ledOnButton');
+        const ledOffButton = document.getElementById('ledOffButton');
+        const valueDisplay = document.getElementById('brightnessValue');
+
+        const LOCK_TEXT = "Lock";
+        const UNLOCK_TEXT = "Unlock";
+        
+        // Grab the brightness of the LED. Disable the slider if it's locked
+        function get_status() {
+            return fetch('/led/status')
+            .then(response => {
+                if(!response.ok) throw new Error('Bad response');
+                return response.json();
+            })
+            .then(data => {
+                const brightness = Math.round(data.brightness * 100);
+                slider.value = brightness;
+                if(data.locked) {
+                    slider.disabled = true;
+                    valueDisplay.textContent = "Locked";
+                    lockButton.value = UNLOCK_TEXT;
+                }
+                else {
+                    slider.disabled = false;
+                    lockButton.value = LOCK_TEXT;
+                    valueDisplay.textContent = brightness;
+                    lastSentValue = brightness;
+                }
+                return data;
+            })
+            .catch(() => {
+                valueDisplay.textContent = "Error";
+            }); 
+        }
+        
+        get_status(); // Call on load
+        let lastSentValue = slider.value;
+
+        function sendBrightness(value) {
+            fetch(`/led/${value}`, { method: 'GET' })
+                .catch(() => {}); // Ignore errors
+        }
+
+        function toggleLock() {
+            // Use button text since we should always know what state the lock is in. Only time this could be wrong is if two clients are connected at once or an error occurs 
+            // on initial get_status() call which we don't really care about for this interface (intended for single user locally only).
+            const action = (lockButton.value === UNLOCK_TEXT) ? 'unlock' : 'lock';
+            fetch(`/led/${action}`, { method: 'GET' })
+                .then(() => get_status()); // Refresh status after toggling
+        }
+
+        lockButton.addEventListener('click', toggleLock);
+        ledOnButton.addEventListener('click', function() {
+            fetch(`/led/on`, { method: 'GET' })
+                .then(() => get_status());
+        });
+        ledOffButton.addEventListener('click', function() {
+            fetch(`/led/off`, { method: 'GET' })
+                .then(() => get_status());
+        });
+
+        slider.addEventListener('input', function() {
+            valueDisplay.textContent = this.value;
+        });
+
+        // Send brightness on change only. That way we limit the number of HTTP requests.
+        slider.addEventListener('change', function() {
+            if (this.value !== lastSentValue) {
+                sendBrightness(this.value);
+                lastSentValue = this.value;
+            }
+        });
+    </script>
+</body>
+</html>
