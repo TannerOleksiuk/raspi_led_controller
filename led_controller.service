@@ -1,0 +1,13 @@
+# Service for running LED controller (allows led lights to be controlled via http api)
+
+[Unit]
+Description=HTTP LED Controller
+After=network.target  # Ensures network is available before starting
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/tanner/python-scripts/led_controller/led_controller.py
+WorkingDirectory=/home/pi/tanner/python-scripts/led_controller
+Restart=always
+User=pi
+Group=pi
+[Install]
+WantedBy=multi-user.target
